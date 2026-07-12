@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Scriba — Générez des contenus qui convertissent</title>
+    <link rel="stylesheet" href="style.css" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✨</text></svg>"
+    />
+  </head>
+  <body>
+    <!-- Fond animé -->
+    <div class="bg" aria-hidden="true">
+      <span class="orb orb-1"></span>
+      <span class="orb orb-2"></span>
+      <span class="orb orb-3"></span>
+    </div>
+
+    <!-- Barre de navigation -->
+    <header class="nav reveal">
+      <a href="#" class="brand">
+        <span class="brand-logo">S</span>
+        <span class="brand-name">Scriba</span>
+      </a>
+      <nav class="nav-links">
+        <a href="#accueil">Accueil</a>
+        <a href="#fonctionnalites">Fonctionnalités</a>
+        <a href="#faq">Questions</a>
+      </nav>
+      <div class="nav-actions" id="navActions">
+        <!-- Vue déconnecté -->
+        <div class="auth-out" id="authOut">
+          <button type="button" class="link-quiet" data-auth-open="login">Se connecter</button>
+          <button type="button" class="btn-dark" data-auth-open="register">
+            Commencer gratuitement
+          </button>
+        </div>
+        <!-- Vue connecté -->
+        <div class="auth-in" id="authIn" hidden>
+          <span class="user-chip"><span class="user-dot"></span><span id="userEmail"></span></span>
+          <button type="button" class="link-quiet" id="logoutBtn">Se déconnecter</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Hero -->
+    <main class="hero" id="accueil">
+      <div class="proof-pill reveal delay-1">
+        <span class="avatars">
+          <i style="--c: #6d8bff"></i><i style="--c: #a06dff"></i><i style="--c: #ff9d6d"></i>
+        </span>
+        <span><strong>Rédigé par l'IA</strong> · rien n'est inventé, uniquement vos infos</span>
+      </div>
+
+      <h1 class="headline" id="headline">
+        Des contenus qui <span class="accent">convertissent</span>,<br />
+        en quelques secondes.
+      </h1>
+
+      <p class="subhead reveal delay-3">
+        Offres d'emploi, posts LinkedIn &amp; Facebook — générés par l'IA,
+        prêts à publier. Vous donnez les infos, Scriba rédige.
+      </p>
+
+      <!-- Carte génératrice -->
+      <section class="card reveal delay-4" id="generateur">
+        <div class="type-select" id="typeSelect">
+          <button type="button" class="type-btn active" data-type="Offre d'emploi">
+            📋 Offre d'emploi
+          </button>
+          <button type="button" class="type-btn" data-type="Publication LinkedIn">
+            💼 Post LinkedIn
+          </button>
+          <button type="button" class="type-btn" data-type="Publication Facebook">
+            👍 Post Facebook
+          </button>
+        </div>
+
+        <textarea
+          id="details"
+          class="main-input"
+          rows="3"
+          placeholder="Décris le poste à pourvoir ou le sujet du post… (missions, avantages, lieu, contrat, ambiance…)"
+        ></textarea>
+
+        <div class="row">
+          <input type="text" id="entreprise" placeholder="Entreprise (ex : Boulangerie Martin)" />
+          <input type="text" id="poste" placeholder="Poste / sujet (ex : Vendeur en boulangerie)" />
+        </div>
+        <!-- champ jumeau utilisé pour les posts sociaux -->
+        <input type="hidden" id="sujet" />
+
+        <div class="row">
+          <select id="ton">
+            <option value="automatique">Ton : Automatique (recommandé)</option>
+            <option value="professionnel">Ton : Professionnel</option>
+            <option value="dynamique">Ton : Dynamique</option>
+            <option value="institutionnel">Ton : Institutionnel</option>
+            <option value="convivial">Ton : Convivial</option>
+            <option value="inspirant">Ton : Inspirant</option>
+          </select>
+          <input type="text" id="motsCles" placeholder="Mots-clés (optionnel) : CDI, Lyon…" />
+        </div>
+
+        <button id="generateBtn" class="btn-primary">✨ Générer mon contenu</button>
+        <p class="microcopy">⚡ Gratuit · sans carte · résultat en quelques secondes</p>
+        <p class="usage-line" id="usageLine" hidden></p>
+
+        <div class="sub-cta">
+          <button type="button" class="btn-outline" id="viewPlansBtn">
+            💳 Voir les abonnements
+          </button>
+          <p class="secure-note">🔒 Paiement 100% sécurisé via Stripe</p>
+        </div>
+      </section>
+
+      <!-- Résultat -->
+      <section class="result-wrap" id="resultWrap" hidden>
+        <div class="result-head">
+          <h2>Votre contenu</h2>
+          <button id="copyBtn" class="btn-ghost" hidden>📋 Copier</button>
+        </div>
+        <div id="result" class="result"></div>
+      </section>
+    </main>
+
+    <!-- Comparatif Avant / Après -->
+    <section class="compare" id="exemple">
+      <h2 class="compare-title reveal-on-scroll">Voyez la différence</h2>
+      <p class="compare-sub reveal-on-scroll">
+        La même annonce, écrite à la main… puis passée par Scriba.
+      </p>
+
+      <div class="compare-grid">
+        <!-- AVANT -->
+        <article class="post-card before reveal-on-scroll">
+          <span class="tag tag-before">Avant Scriba</span>
+          <div class="post-head">
+            <span class="post-avatar">B</span>
+            <div>
+              <strong>Boulangerie Martin</strong>
+              <span class="post-meta">Il y a 2 h · 👁️ 34 vues</span>
+            </div>
+          </div>
+          <p class="post-body dull">
+            Bonjour, nous recherchons un vendeur pour notre boulangerie. Poste en
+            CDI à Lyon. Débutant accepté. Merci d'envoyer votre CV.
+          </p>
+          <div class="post-stats dull">👍 1 · 💬 0 · ↪️ 0</div>
+        </article>
+
+        <!-- Flèche -->
+        <div class="compare-arrow" aria-hidden="true">→</div>
+
+        <!-- APRÈS -->
+        <article class="post-card after reveal-on-scroll">
+          <span class="tag tag-after">Après Scriba ✨</span>
+          <div class="post-head">
+            <span class="post-avatar avatar-glow">B</span>
+            <div>
+              <strong>Boulangerie Martin</strong>
+              <span class="post-meta">Il y a 2 h · 🔥 3 210 vues</span>
+            </div>
+          </div>
+          <p class="post-body">
+            🥐 <strong>On recrute !</strong> Et si votre prochain job sentait bon
+            le pain chaud ?<br /><br />
+            La Boulangerie Martin (Lyon) cherche son futur sourire du matin 👋<br />
+            ✅ CDI 35h — débutant bienvenu, on vous forme<br />
+            ✅ Une équipe soudée, une ambiance familiale<br />
+            ✅ Vos week-ends… parfois rien qu'à vous 😉<br /><br />
+            Envie de pétrir une nouvelle aventure ? Postulez 👇<br />
+            <span class="post-tags">#Recrutement #Lyon #Boulangerie #CDI #OnRecrute</span>
+          </p>
+          <div class="post-stats">❤️ 247 · 💬 38 · ↪️ 52 partages</div>
+          <div class="post-foot">✨ Généré par Scriba en 4 secondes</div>
+        </article>
+      </div>
+    </section>
+
+    <!-- Bandeau fonctionnalités -->
+    <section class="features" id="fonctionnalites">
+      <div class="feature reveal-on-scroll">
+        <span class="feature-ico">🎯</span>
+        <h3>Optimisé pour convertir</h3>
+        <p>Structures de copywriting éprouvées (AIDA, PAS…) et mots-clés SEO intégrés naturellement.</p>
+      </div>
+      <div class="feature reveal-on-scroll">
+        <span class="feature-ico">⚡</span>
+        <h3>Instantané</h3>
+        <p>Le texte s'écrit en direct sous vos yeux. Copiez, collez, publiez.</p>
+      </div>
+      <div class="feature reveal-on-scroll">
+        <span class="feature-ico">🔒</span>
+        <h3>Fiable</h3>
+        <p>L'IA n'invente jamais de chiffres ni de faits — elle n'utilise que vos informations.</p>
+      </div>
+    </section>
+
+    <footer class="footer" id="faq">
+      <p>✨ <strong>Scriba</strong> — votre assistant de contenu propulsé par l'IA.</p>
+    </footer>
+
+    <!-- Modale d'authentification -->
+    <div class="modal-overlay" id="authModal" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+        <button class="modal-close" id="authClose" type="button" aria-label="Fermer">×</button>
+
+        <div class="auth-tabs">
+          <button type="button" class="auth-tab active" data-tab="login">Connexion</button>
+          <button type="button" class="auth-tab" data-tab="register">Inscription</button>
+        </div>
+
+        <h2 class="auth-title" id="authTitle">Bon retour 👋</h2>
+        <p class="auth-lead" id="authLead">Connectez-vous pour générer vos contenus.</p>
+
+        <form class="auth-form" id="authForm" novalidate>
+          <label class="field">
+            <span>E-mail</span>
+            <input
+              type="email"
+              id="authEmail"
+              autocomplete="email"
+              placeholder="vous@exemple.com"
+              required
+            />
+          </label>
+          <label class="field">
+            <span>Mot de passe</span>
+            <input
+              type="password"
+              id="authPassword"
+              autocomplete="current-password"
+              placeholder="••••••••"
+              minlength="8"
+              required
+            />
+            <small class="field-hint" id="pwHint" hidden>Au moins 8 caractères.</small>
+          </label>
+
+          <p class="auth-error" id="authError" hidden></p>
+
+          <button type="submit" class="btn-primary" id="authSubmit">Se connecter</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modale d'abonnement (paywall) -->
+    <div class="modal-overlay" id="paywallModal" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pwTitle">
+        <button class="modal-close" id="paywallClose" type="button" aria-label="Fermer">×</button>
+        <span class="pw-badge">✨ Scriba Pro</span>
+        <h2 class="auth-title" id="pwTitle">Passez à l'illimité 🚀</h2>
+        <p class="auth-lead" id="pwLead">
+          Vous avez utilisé vos 3 générations gratuites. Abonnez-vous pour continuer à créer.
+        </p>
+        <ul class="pw-list">
+          <li>Générations <strong>illimitées</strong></li>
+          <li>Tous les types de contenu (offres, LinkedIn, Facebook)</li>
+          <li>Génération en direct, prête à publier</li>
+        </ul>
+        <p class="auth-error" id="paywallError" hidden></p>
+        <button type="button" class="btn-primary" id="subscribeBtn">S'abonner</button>
+        <p class="microcopy">🔒 Paiement 100% sécurisé via Stripe · résiliable à tout moment</p>
+      </div>
+    </div>
+
+    <!-- Notification légère -->
+    <div class="toast" id="toast" hidden></div>
+
+    <!-- Preuve sociale (bas à gauche) -->
+    <div class="social-proof" id="socialProof" hidden aria-live="polite">
+      <span class="sp-emoji">🎉</span>
+      <div class="sp-text">
+        <strong>Un client vient de passer Pro</strong>
+        <span class="sp-time" id="spTime"></span>
+      </div>
+      <button class="sp-close" id="spClose" type="button" aria-label="Fermer">×</button>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
