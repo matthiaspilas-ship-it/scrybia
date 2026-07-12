@@ -1,27 +1,23 @@
-# Blueprint Render — déploiement automatique du site.
-# Sur Render : New + → "Blueprint" → connecte ce dépôt GitHub.
+# Blueprint Render — version GRATUITE (sans carte bancaire).
+# ⚠️ Le plan gratuit n'a pas de disque persistant : les comptes clients et les
+#    ventes sont réinitialisés à chaque redémarrage. Parfait pour VOIR le site
+#    en ligne et tout tester. Pour de vrais clients payants, repasser en
+#    plan "starter" + disque (voir DEPLOY.md).
 services:
   - type: web
     name: scriba
     runtime: node
-    plan: starter # nécessaire pour le disque persistant (le plan gratuit n'en a pas)
+    plan: free
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /
-    # Disque persistant : conserve comptes clients et ventes entre les déploiements.
-    disk:
-      name: scriba-data
-      mountPath: /var/data
-      sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
-      - key: DATA_DIR
-        value: /var/data
-      # Secret de session : généré automatiquement par Render (stable et fort).
+      # Secret de session généré automatiquement (stable et fort).
       - key: JWT_SECRET
         generateValue: true
-      # À renseigner dans le dashboard Render (Environment) — NON versionnés :
+      # À renseigner dans le dashboard Render — NON versionnés :
       - key: GROQ_API_KEY
         sync: false
       - key: STRIPE_SECRET_KEY
