@@ -12,6 +12,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@upstash/redis": "^1.38.0",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.0.0",

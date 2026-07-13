@@ -1,4 +1,6 @@
 import "dotenv/config";
+import path from "path";
+import { fileURLToPath } from "url";
 import express from "express";
 import cookieParser from "cookie-parser";
 import Groq from "groq-sdk";
@@ -21,9 +23,11 @@ import {
 import { stripe, PRICE_ID, WEBHOOK_SECRET, stripeReady } from "./billing.js";
 import { recentPurchases } from "./socialProof.js";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 const app = express();
-// Derrière le proxy HTTPS de Render : nécessaire pour que les cookies "secure"
-// et req.protocol (https) fonctionnent correctement.
+// Derrière le proxy HTTPS (Vercel/Render) : nécessaire pour les cookies "secure"
+// et req.protocol (https).
 app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3000;
 const MODEL = "llama-3.3-70b-versatile"; // gratuit, rapide, bon en français
@@ -37,7 +41,7 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "cle-absente" });
 app.post(
   "/api/billing/webhook",
   express.raw({ type: "application/json" }),
-  (req, res) => {
+  async (req, res) => {
     if (!stripe) return res.status(503).end();
     let event;
     try {
@@ -54,14 +58,14 @@ app.post(
     const obj = event.data.object;
     if (event.type === "checkout.session.completed") {
       if (obj.client_reference_id) {
-        if (obj.customer) setStripeCustomer(obj.client_reference_id, obj.customer);
-        setSubscription(obj.client_reference_id, "active");
+        if (obj.customer) await setStripeCustomer(obj.client_reference_id, obj.customer);
+        await setSubscription(obj.client_reference_id, "active");
       }
     } else if (event.type.startsWith("customer.subscription.")) {
-      const user = findByStripeCustomer(obj.customer);
+      const user = await findByStripeCustomer(obj.customer);
       if (user) {
         const status = event.type === "customer.subscription.deleted" ? "canceled" : obj.status;
-        setSubscription(user.id, status);
+        await setSubscription(user.id, status);
       }
     }
     res.json({ received: true });
@@ -73,7 +77,7 @@ app.use(cookieParser());
 app.use(attachUser); // renseigne req.user si un cookie de session est valide
 // no-store : le navigateur récupère toujours la dernière version (évite le cache).
 app.use(
-  express.static("public", {
+  express.static(path.join(__dirname, "public"), {
     etag: false,
     lastModified: false,
     setHeaders: (res) => res.setHeader("Cache-Control", "no-store"),
@@ -88,7 +92,7 @@ app.post("/api/auth/register", async (req, res) => {
     const { email, password } = req.body || {};
     const user = await registerUser(email, password);
     res.cookie(COOKIE_NAME, issueToken(user), cookieOptions);
-    res.status(201).json({ user, usage: getUsage(user.id) });
+    res.status(201).json({ user, usage: await getUsage(user.id) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || "Erreur serveur." });
   }
@@ -99,7 +103,7 @@ app.post("/api/auth/login", async (req, res) => {
     const { email, password } = req.body || {};
     const user = await loginUser(email, password);
     res.cookie(COOKIE_NAME, issueToken(user), cookieOptions);
-    res.json({ user, usage: getUsage(user.id) });
+    res.json({ user, usage: await getUsage(user.id) });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message || "Erreur serveur." });
   }
@@ -111,14 +115,14 @@ app.post("/api/auth/logout", (_req, res) => {
 });
 
 // Preuve sociale : ventes récentes anonymisées (horodatage seulement).
-app.get("/api/social-proof", (_req, res) => {
-  res.json({ events: recentPurchases(10) });
+app.get("/api/social-proof", async (_req, res) => {
+  res.json({ events: await recentPurchases(10) });
 });
 
 // Renvoie l'utilisateur courant (ou null) + son quota — utilisé par le front.
-app.get("/api/auth/me", (req, res) => {
+app.get("/api/auth/me", async (req, res) => {
   if (!req.user) return res.json({ user: null, usage: null });
-  res.json({ user: req.user, usage: getUsage(req.user.id) });
+  res.json({ user: req.user, usage: await getUsage(req.user.id) });
 });
 
 // ---------- Facturation (Stripe) ----------
@@ -132,7 +136,7 @@ app.post("/api/billing/checkout", requireAuth, async (req, res) => {
     });
   }
   try {
-    const account = getAccount(req.user.id);
+    const account = await getAccount(req.user.id);
     let customerId = account.stripeCustomerId;
     if (!customerId) {
       const customer = await stripe.customers.create({
@@ -140,7 +144,7 @@ app.post("/api/billing/checkout", requireAuth, async (req, res) => {
         metadata: { userId: account.id },
       });
       customerId = customer.id;
-      setStripeCustomer(account.id, customerId);
+      await setStripeCustomer(account.id, customerId);
     }
 
     const base = baseUrl(req);
@@ -170,10 +174,10 @@ app.get("/api/billing/confirm", requireAuth, async (req, res) => {
       return res.status(403).json({ error: "Session non autorisée." });
     }
     if (session.status === "complete" || session.payment_status === "paid") {
-      if (session.customer) setStripeCustomer(req.user.id, session.customer);
-      setSubscription(req.user.id, "active");
+      if (session.customer) await setStripeCustomer(req.user.id, session.customer);
+      await setSubscription(req.user.id, "active");
     }
-    res.json({ usage: getUsage(req.user.id) });
+    res.json({ usage: await getUsage(req.user.id) });
   } catch (err) {
     console.error("Erreur Stripe (confirm):", err.message);
     res.status(500).json({ error: "Vérification du paiement impossible." });
@@ -206,7 +210,7 @@ app.post("/api/generate", requireAuth, async (req, res) => {
   }
 
   // Quota gratuit : au-delà de la limite, il faut un abonnement actif.
-  const usage = getUsage(req.user.id);
+  const usage = await getUsage(req.user.id);
   if (usage && !usage.subscribed && usage.used >= usage.limit) {
     return res.status(402).json({
       error: "quota_atteint",
@@ -257,7 +261,7 @@ app.post("/api/generate", requireAuth, async (req, res) => {
         send("error", { message: "Réponse vide. Réessayez ou reformulez la demande." });
       } else {
         // Génération réussie → on décompte un crédit gratuit (pas pour les abonnés).
-        if (!usage.subscribed) incrementUsage(req.user.id);
+        if (!usage.subscribed) await incrementUsage(req.user.id);
         send("done", {});
       }
       res.end();
@@ -279,22 +283,28 @@ app.post("/api/generate", requireAuth, async (req, res) => {
   }
 });
 
-const server = app.listen(PORT, () => {
-  if (!process.env.GROQ_API_KEY) {
-    console.warn(
-      "\n⚠️  GROQ_API_KEY n'est pas définie. Copiez .env.example vers .env et ajoutez votre clé (gratuite).\n"
-    );
-  }
-  console.log(`\n✅ Serveur prêt : http://localhost:${PORT}\n`);
-});
+// En local, on démarre le serveur. Sur Vercel (serverless), on exporte
+// seulement l'app : Vercel s'occupe de recevoir les requêtes.
+if (!process.env.VERCEL) {
+  const server = app.listen(PORT, () => {
+    if (!process.env.GROQ_API_KEY) {
+      console.warn(
+        "\n⚠️  GROQ_API_KEY n'est pas définie. Copiez .env.example vers .env et ajoutez votre clé (gratuite).\n"
+      );
+    }
+    console.log(`\n✅ Serveur prêt : http://localhost:${PORT}\n`);
+  });
 
-// Message clair si le port est déjà occupé par une autre application.
-server.on("error", (err) => {
-  if (err.code === "EADDRINUSE") {
-    console.error(
-      `\n❌ Le port ${PORT} est déjà utilisé par une autre application.\n   Changez la valeur de PORT dans le fichier .env (ex : PORT=4000), puis relancez.\n`
-    );
-    process.exit(1);
-  }
-  throw err;
-});
+  // Message clair si le port est déjà occupé par une autre application.
+  server.on("error", (err) => {
+    if (err.code === "EADDRINUSE") {
+      console.error(
+        `\n❌ Le port ${PORT} est déjà utilisé par une autre application.\n   Changez la valeur de PORT dans le fichier .env (ex : PORT=4000), puis relancez.\n`
+      );
+      process.exit(1);
+    }
+    throw err;
+  });
+}
+
+export default app;
