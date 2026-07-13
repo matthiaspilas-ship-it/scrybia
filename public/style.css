@@ -32,6 +32,39 @@ body {
   overflow-x: hidden;
 }
 
+/* ---------- Bandeau d'annonce ---------- */
+.announce {
+  position: relative;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 16px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+}
+.announce strong {
+  font-weight: 800;
+}
+.announce-badge {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+@media (max-width: 520px) {
+  .announce {
+    font-size: 13px;
+  }
+}
+
 /* ---------- Fond animé (orbes) ---------- */
 .bg {
   position: fixed;
