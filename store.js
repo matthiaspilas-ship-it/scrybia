@@ -7,9 +7,10 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const useRedis = Boolean(
-  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
-);
+// On nettoie les valeurs (espaces/retours à la ligne collés au copier-coller).
+const REDIS_URL = (process.env.UPSTASH_REDIS_REST_URL || "").trim();
+const REDIS_TOKEN = (process.env.UPSTASH_REDIS_REST_TOKEN || "").trim();
+const useRedis = Boolean(REDIS_URL && REDIS_TOKEN);
 
 const PURCHASES_MAX = 50;
 
@@ -17,10 +18,7 @@ const PURCHASES_MAX = 50;
 // Backend Redis (Upstash) — pour Vercel (pas de système de fichiers persistant)
 // ---------------------------------------------------------------------------
 function makeRedisBackend(Redis) {
-  const redis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN,
-  });
+  const redis = new Redis({ url: REDIS_URL, token: REDIS_TOKEN });
   const parse = (v) => (v == null ? null : typeof v === "string" ? JSON.parse(v) : v);
 
   return {
