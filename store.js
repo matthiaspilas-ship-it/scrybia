@@ -105,19 +105,27 @@ function makeFileBackend() {
 }
 
 // ---------------------------------------------------------------------------
-let backend;
-if (useRedis) {
-  const { Redis } = await import("@upstash/redis");
-  backend = makeRedisBackend(Redis);
-  console.log("🗄️  Stockage : Upstash Redis");
-} else {
-  backend = makeFileBackend();
-  console.log("🗄️  Stockage : fichiers locaux (data/)");
+// Initialisation PARESSEUSE (au premier appel), sans "top-level await" : évite
+// tout crash au démarrage de la fonction serverless (FUNCTION_INVOCATION_FAILED).
+let backendPromise;
+async function getBackend() {
+  if (!backendPromise) {
+    backendPromise = (async () => {
+      if (useRedis) {
+        const { Redis } = await import("@upstash/redis");
+        console.log("🗄️  Stockage : Upstash Redis");
+        return makeRedisBackend(Redis);
+      }
+      console.log("🗄️  Stockage : fichiers locaux (data/)");
+      return makeFileBackend();
+    })();
+  }
+  return backendPromise;
 }
 
-export const getUser = (id) => backend.getUser(id);
-export const getUserByEmail = (email) => backend.getUserByEmail(email);
-export const getUserByCustomer = (cid) => backend.getUserByCustomer(cid);
-export const putUser = (user) => backend.putUser(user);
-export const pushPurchase = (ts) => backend.pushPurchase(ts);
-export const getPurchases = () => backend.getPurchases();
+export const getUser = async (id) => (await getBackend()).getUser(id);
+export const getUserByEmail = async (email) => (await getBackend()).getUserByEmail(email);
+export const getUserByCustomer = async (cid) => (await getBackend()).getUserByCustomer(cid);
+export const putUser = async (user) => (await getBackend()).putUser(user);
+export const pushPurchase = async (ts) => (await getBackend()).pushPurchase(ts);
+export const getPurchases = async () => (await getBackend()).getPurchases();
