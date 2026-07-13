@@ -3,7 +3,6 @@ import path from "path";
 import { fileURLToPath } from "url";
 import express from "express";
 import cookieParser from "cookie-parser";
-import Groq from "groq-sdk";
 import { SYSTEM_PROMPT, buildUserMessage } from "./systemPrompt.js";
 import {
   COOKIE_NAME,
@@ -31,10 +30,6 @@ const app = express();
 app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3000;
 const MODEL = "llama-3.3-70b-versatile"; // gratuit, rapide, bon en français
-
-// Le SDK lit la clé depuis GROQ_API_KEY (.env). Valeur de secours pour permettre
-// au serveur de démarrer même sans clé (un message clair est renvoyé à l'usage).
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "cle-absente" });
 
 // ---------- Webhook Stripe ----------
 // Doit lire le CORPS BRUT pour vérifier la signature → déclaré AVANT express.json().
@@ -234,7 +229,9 @@ app.post("/api/generate", requireAuth, async (req, res) => {
     return res.status(402).json({ error: "quota_atteint", message });
   }
 
-  // En-têtes SSE
+  // Réponse au format SSE (compatible avec le front). L'appel à Groq se fait en
+  // une seule requête via fetch natif : fiable en serverless (Vercel), là où le
+  // streaming du SDK échoue ("Connection error").
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
@@ -243,60 +240,51 @@ app.post("/api/generate", requireAuth, async (req, res) => {
   const send = (event, payload) =>
     res.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
 
-  // Le client a réellement fermé la connexion (déconnexion) → on arrête d'envoyer.
-  // On écoute "res" (pas "req") : sur Node récent, req émet "close" dès que le
-  // corps est lu, ce qui n'est PAS une déconnexion. On ne considère l'abandon
-  // que si la réponse n'a pas encore été terminée normalement.
-  let aborted = false;
-  res.on("close", () => {
-    if (!res.writableEnded) aborted = true;
-  });
-
   try {
-    const stream = await groq.chat.completions.create({
-      model: MODEL,
-      stream: true,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: buildUserMessage(data) },
-      ],
+    const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: buildUserMessage(data) },
+        ],
+      }),
     });
 
-    let recu = "";
-    for await (const chunk of stream) {
-      if (aborted) break;
-      const text = chunk.choices?.[0]?.delta?.content || "";
-      if (text) {
-        recu += text;
-        send("delta", { text });
-      }
+    if (!resp.ok) {
+      const message =
+        resp.status === 401
+          ? "Clé API invalide. Vérifiez GROQ_API_KEY."
+          : resp.status === 429
+          ? "Limite de requêtes atteinte. Réessayez dans un instant."
+          : "Une erreur est survenue pendant la génération.";
+      send("error", { message });
+      return res.end();
     }
 
-    if (!aborted) {
-      if (!recu) {
-        send("error", { message: "Réponse vide. Réessayez ou reformulez la demande." });
-      } else {
-        // Génération réussie → on décompte (Pro illimité : incrementUsage l'ignore).
-        await incrementUsage(req.user.id);
-        send("done", {});
-      }
-      res.end();
+    const json = await resp.json();
+    const recu = json.choices?.[0]?.message?.content || "";
+    if (!recu) {
+      send("error", { message: "Réponse vide. Réessayez ou reformulez la demande." });
+      return res.end();
     }
+
+    // Envoi par petits morceaux (conserve un effet d'écriture progressif).
+    for (const part of recu.match(/[\s\S]{1,90}/g) || [recu]) send("delta", { text: part });
+    await incrementUsage(req.user.id);
+    send("done", {});
+    res.end();
   } catch (err) {
-    console.error("Erreur API Groq:", err);
-    const status = err?.status;
+    console.error("Erreur génération:", err);
     if (!res.headersSent) {
       return res.status(500).json({ error: "Erreur du serveur." });
     }
-    const message =
-      status === 401
-        ? "Clé API invalide ou manquante. Vérifiez votre fichier .env."
-        : status === 429
-        ? "Limite de requêtes atteinte. Réessayez dans un instant."
-        : `Une erreur est survenue pendant la génération. [debug: status=${status} ${String(
-            err?.message || err
-          ).slice(0, 160)}]`;
-    send("error", { message });
+    send("error", { message: "Une erreur est survenue pendant la génération." });
     res.end();
   }
 });
