@@ -245,7 +245,8 @@ app.post("/api/generate", requireAuth, async (req, res) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        // On retire tout espace/retour à la ligne accidentel dans la clé.
+        Authorization: `Bearer ${(process.env.GROQ_API_KEY || "").replace(/\s+/g, "")}`,
       },
       body: JSON.stringify({
         model: MODEL,
