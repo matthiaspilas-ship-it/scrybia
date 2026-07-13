@@ -285,11 +285,7 @@ app.post("/api/generate", requireAuth, async (req, res) => {
     if (!res.headersSent) {
       return res.status(500).json({ error: "Erreur du serveur." });
     }
-    send("error", {
-      message: `Erreur génération [debug: ${err?.message || err} | cause=${
-        err?.cause?.code || err?.cause?.message || "?"
-      }]`,
-    });
+    send("error", { message: "Une erreur est survenue pendant la génération." });
     res.end();
   }
 });
