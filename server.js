@@ -293,7 +293,9 @@ app.post("/api/generate", requireAuth, async (req, res) => {
         ? "Clé API invalide ou manquante. Vérifiez votre fichier .env."
         : status === 429
         ? "Limite de requêtes atteinte. Réessayez dans un instant."
-        : "Une erreur est survenue pendant la génération.";
+        : `Une erreur est survenue pendant la génération. [debug: status=${status} ${String(
+            err?.message || err
+          ).slice(0, 160)}]`;
     send("error", { message });
     res.end();
   }
