@@ -255,20 +255,61 @@
 
     <!-- Modale d'abonnement (paywall) -->
     <div class="modal-overlay" id="paywallModal" hidden>
-      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pwTitle">
+      <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="pwTitle">
         <button class="modal-close" id="paywallClose" type="button" aria-label="Fermer">×</button>
-        <span class="pw-badge">✨ Scriba Pro</span>
-        <h2 class="auth-title" id="pwTitle">Passez à l'illimité 🚀</h2>
-        <p class="auth-lead" id="pwLead">
-          Vous avez utilisé vos 3 générations gratuites. Abonnez-vous pour continuer à créer.
-        </p>
-        <ul class="pw-list">
-          <li>Générations <strong>illimitées</strong></li>
-          <li>Tous les types de contenu (offres, LinkedIn, Facebook)</li>
-          <li>Génération en direct, prête à publier</li>
-        </ul>
+        <h2 class="auth-title" id="pwTitle">Choisissez votre offre 🚀</h2>
+
+        <!-- Message si déjà abonné -->
+        <p class="auth-lead" id="pwActive" hidden></p>
+
+        <!-- Offres -->
+        <div id="pwOffers">
+          <p class="auth-lead">Générez plus, sans limite. Résiliable à tout moment.</p>
+
+          <div class="cycle-toggle" id="cycleToggle">
+            <button type="button" class="cycle-btn active" data-cycle="monthly">Mensuel</button>
+            <button type="button" class="cycle-btn" data-cycle="annual">
+              Annuel <span class="cycle-save">2 mois offerts</span>
+            </button>
+          </div>
+
+          <div class="plans">
+            <div class="plan-card">
+              <div class="plan-name">Starter</div>
+              <div class="plan-price">
+                <span class="plan-amount" data-amount="starter">9,99 €</span>
+                <span class="plan-per" data-per>/mois</span>
+              </div>
+              <ul class="plan-feats">
+                <li>30 générations / mois</li>
+                <li>Tous les types de contenu</li>
+                <li>Génération en direct</li>
+              </ul>
+              <button type="button" class="btn-outline plan-choose" data-plan="starter">
+                Choisir Starter
+              </button>
+            </div>
+
+            <div class="plan-card featured">
+              <div class="plan-tag">Populaire</div>
+              <div class="plan-name">Pro</div>
+              <div class="plan-price">
+                <span class="plan-amount" data-amount="pro">19,99 €</span>
+                <span class="plan-per" data-per>/mois</span>
+              </div>
+              <ul class="plan-feats">
+                <li><strong>Générations illimitées</strong></li>
+                <li>Tous les types de contenu</li>
+                <li>Génération en direct</li>
+              </ul>
+              <button type="button" class="btn-primary plan-choose" data-plan="pro">
+                Choisir Pro
+              </button>
+            </div>
+          </div>
+        </div>
+
         <p class="auth-error" id="paywallError" hidden></p>
-        <button type="button" class="btn-primary" id="subscribeBtn">S'abonner</button>
         <p class="microcopy">🔒 Paiement 100% sécurisé via Stripe · résiliable à tout moment</p>
       </div>
     </div>

@@ -7,6 +7,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { recordPurchase } from "./socialProof.js";
 import { getUser, getUserByEmail, getUserByCustomer, putUser } from "./store.js";
+import { planLimit } from "./billing.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
@@ -41,30 +42,62 @@ function publicUser(user) {
   return { id: user.id, email: user.email, createdAt: user.createdAt };
 }
 
-// ---------- Quota gratuit & abonnement ----------
-export const FREE_LIMIT = 3; // générations gratuites par compte
+// ---------- Quota & abonnement ----------
+export const FREE_LIMIT = 3; // générations gratuites (à vie) sans abonnement
 
 const isActiveStatus = (s) => s === "active" || s === "trialing";
+const currentPeriod = () => new Date().toISOString().slice(0, 7); // "AAAA-MM"
 
-// État d'usage : combien de générations restent, abonné ou non.
+// État d'usage renvoyé au front, selon l'offre :
+//  - pro actif     → illimité
+//  - starter actif → quota mensuel (remise à zéro chaque mois)
+//  - sinon (free)  → 3 générations à vie
 export async function getUsage(id) {
   const u = await getUser(id);
   if (!u) return null;
-  const subscribed = u.plan === "pro" && isActiveStatus(u.subscriptionStatus);
+  const active = isActiveStatus(u.subscriptionStatus);
+
+  if (u.plan === "pro" && active) {
+    return { plan: "pro", subscribed: true, unlimited: true, used: 0, limit: null, remaining: null };
+  }
+  if (u.plan === "starter" && active) {
+    const limit = planLimit("starter");
+    const used = u.periodKey === currentPeriod() ? u.periodUsed || 0 : 0;
+    return {
+      plan: "starter",
+      subscribed: true,
+      unlimited: false,
+      used,
+      limit,
+      remaining: Math.max(0, limit - used),
+    };
+  }
   const used = u.generationsUsed || 0;
   return {
+    plan: "free",
+    subscribed: false,
+    unlimited: false,
     used,
     limit: FREE_LIMIT,
-    remaining: subscribed ? null : Math.max(0, FREE_LIMIT - used),
-    subscribed,
-    plan: subscribed ? "pro" : "free",
+    remaining: Math.max(0, FREE_LIMIT - used),
   };
 }
 
 export async function incrementUsage(id) {
   const u = await getUser(id);
   if (!u) return;
-  u.generationsUsed = (u.generationsUsed || 0) + 1;
+  const active = isActiveStatus(u.subscriptionStatus);
+  if (u.plan === "pro" && active) return; // illimité → pas de décompte
+  if (u.plan === "starter" && active) {
+    const period = currentPeriod();
+    if (u.periodKey !== period) {
+      u.periodKey = period;
+      u.periodUsed = 0;
+    }
+    u.periodUsed = (u.periodUsed || 0) + 1;
+  } else {
+    u.generationsUsed = (u.generationsUsed || 0) + 1;
+  }
   await putUser(u);
 }
 
@@ -87,15 +120,25 @@ export async function findByStripeCustomer(customerId) {
   return u ? { id: u.id, email: u.email } : null;
 }
 
-export async function setSubscription(id, status) {
+// tier = "starter" | "pro" (offre souscrite). Non fourni → on conserve le plan.
+export async function setSubscription(id, status, tier) {
   const u = await getUser(id);
   if (!u) return;
-  const wasPro = u.plan === "pro";
+  const wasActivePaid =
+    (u.plan === "starter" || u.plan === "pro") && isActiveStatus(u.subscriptionStatus);
+
   u.subscriptionStatus = status;
-  u.plan = isActiveStatus(status) ? "pro" : "free";
+  if (isActiveStatus(status)) {
+    if (tier) u.plan = tier;
+  } else {
+    u.plan = "free";
+  }
   await putUser(u);
-  // Nouvelle vente (transition gratuit → Pro) → preuve sociale.
-  if (!wasPro && u.plan === "pro") await recordPurchase();
+
+  // Nouvelle vente (passage à une offre payante active) → preuve sociale.
+  const nowActivePaid =
+    isActiveStatus(status) && (u.plan === "starter" || u.plan === "pro");
+  if (!wasActivePaid && nowActivePaid) await recordPurchase();
 }
 
 // ---------- Inscription / Connexion ----------

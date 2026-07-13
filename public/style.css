@@ -461,6 +461,126 @@ button.link-quiet {
   font-weight: 800;
 }
 
+/* ---------- Grille tarifaire (paywall) ---------- */
+.modal-wide {
+  max-width: 620px;
+}
+.cycle-toggle {
+  display: inline-flex;
+  gap: 4px;
+  margin: 4px auto 20px;
+  padding: 5px;
+  border-radius: 12px;
+  background: #f1f4fc;
+}
+.cycle-btn {
+  border: none;
+  background: none;
+  padding: 8px 18px;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.15s;
+}
+.cycle-btn.active {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+.cycle-save {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: #22c55e;
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+.plans {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  text-align: left;
+}
+.plan-card {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px 18px;
+  display: flex;
+  flex-direction: column;
+}
+.plan-card.featured {
+  border-color: var(--accent);
+  box-shadow: 0 12px 30px rgba(59, 108, 255, 0.16);
+}
+.plan-tag {
+  position: absolute;
+  top: -10px;
+  right: 16px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+.plan-name {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.plan-price {
+  margin: 8px 0 14px;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+.plan-amount {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.plan-per {
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+.plan-feats {
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  flex: 1;
+}
+.plan-feats li {
+  position: relative;
+  padding-left: 24px;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.plan-feats li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+  font-weight: 800;
+}
+.plan-choose {
+  width: 100%;
+}
+@media (max-width: 520px) {
+  .plans {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ---------- Toast ---------- */
 .toast {
   position: fixed;

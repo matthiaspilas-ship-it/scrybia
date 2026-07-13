@@ -113,7 +113,7 @@ function setUser(user, nextUsage) {
   renderUsage();
 }
 
-// Affiche le quota restant (ou le statut Pro) sous le bouton de génération.
+// Affiche le quota restant selon l'offre, sous le bouton de génération.
 function renderUsage() {
   const line = $("usageLine");
   if (!currentUser || !usage) {
@@ -122,9 +122,13 @@ function renderUsage() {
   }
   line.hidden = false;
   line.className = "usage-line";
-  if (usage.subscribed) {
+  if (usage.unlimited) {
     line.innerHTML = "⭐ <strong>Pro</strong> — générations illimitées";
     line.classList.add("pro");
+  } else if (usage.plan === "starter") {
+    const r = usage.remaining;
+    line.innerHTML = `⭐ <strong>Starter</strong> — <strong>${r}</strong>/${usage.limit} générations ce mois`;
+    if (r <= 0) line.classList.add("empty");
   } else if (usage.remaining > 0) {
     const n = usage.remaining;
     line.innerHTML = `🎁 <strong>${n}</strong> génération${n > 1 ? "s" : ""} gratuite${
@@ -132,10 +136,11 @@ function renderUsage() {
     } restante${n > 1 ? "s" : ""}`;
   } else {
     line.innerHTML =
-      'Générations gratuites épuisées — <button type="button" class="go-pro" id="goPro">passez à Pro</button>';
+      'Générations gratuites épuisées — <button type="button" class="go-pro" id="goPro">voir les offres</button>';
     line.classList.add("empty");
-    $("goPro").addEventListener("click", openPaywall);
   }
+  const goPro = $("goPro");
+  if (goPro) goPro.addEventListener("click", openPaywall);
 }
 
 // Récupère l'usage à jour depuis le serveur.
@@ -163,34 +168,50 @@ function showToast(msg) {
   }, 4000);
 }
 
-// ---------- Paywall (abonnement) ----------
+// ---------- Paywall (offres d'abonnement) ----------
 const paywall = $("paywallModal");
-const PRICE_LABEL = "19,99 €/mois";
+let cycle = "monthly"; // "monthly" | "annual"
+
+const AMOUNTS = {
+  monthly: { starter: "9,99 €", pro: "19,99 €", per: "/mois" },
+  annual: { starter: "99 €", pro: "199 €", per: "/an" },
+};
+
+function renderCycle() {
+  document
+    .querySelectorAll(".cycle-btn")
+    .forEach((b) => b.classList.toggle("active", b.dataset.cycle === cycle));
+  const a = AMOUNTS[cycle];
+  document.querySelector('[data-amount="starter"]').textContent = a.starter;
+  document.querySelector('[data-amount="pro"]').textContent = a.pro;
+  document.querySelectorAll("[data-per]").forEach((e) => (e.textContent = a.per));
+}
 
 function openPaywall() {
-  const lead = $("pwLead");
-  const btn = $("subscribeBtn");
-  if (usage && usage.subscribed) {
-    $("pwTitle").textContent = "Vous êtes Pro ✨";
-    lead.textContent = "Votre abonnement est actif — générations illimitées.";
-    btn.disabled = true;
-    btn.textContent = "Abonnement actif ✓";
+  const subscribed = usage && usage.subscribed;
+  $("pwOffers").hidden = subscribed;
+  $("pwActive").hidden = !subscribed;
+  if (subscribed) {
+    $("pwTitle").textContent = "Vous êtes abonné ✨";
+    $("pwActive").textContent =
+      usage.plan === "pro"
+        ? "Offre Pro active — générations illimitées."
+        : `Offre Starter active — ${usage.remaining}/${usage.limit} générations restantes ce mois.`;
   } else {
-    $("pwTitle").textContent = "Passez à l'illimité 🚀";
-    lead.textContent = `Générez sans limite avec Scriba Pro — ${PRICE_LABEL}.`;
-    btn.disabled = false;
-    btn.textContent = `S'abonner — ${PRICE_LABEL}`;
+    $("pwTitle").textContent = "Choisissez votre offre 🚀";
+    renderCycle();
   }
+  $("paywallError").hidden = true;
   paywall.hidden = false;
   document.body.style.overflow = "hidden";
 }
 
-// Bouton "Voir les abonnements" (toujours visible)
-$("viewPlansBtn").addEventListener("click", openPaywall);
 function closePaywall() {
   paywall.hidden = true;
   document.body.style.overflow = "";
 }
+
+$("viewPlansBtn").addEventListener("click", openPaywall);
 $("paywallClose").addEventListener("click", closePaywall);
 paywall.addEventListener("click", (e) => {
   if (e.target === paywall) closePaywall();
@@ -199,23 +220,39 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !paywall.hidden) closePaywall();
 });
 
-$("subscribeBtn").addEventListener("click", async () => {
-  const btn = $("subscribeBtn");
+// Bascule mensuel / annuel
+document
+  .querySelectorAll(".cycle-btn")
+  .forEach((b) =>
+    b.addEventListener("click", () => {
+      cycle = b.dataset.cycle;
+      renderCycle();
+    })
+  );
+
+// Boutons "Choisir Starter / Pro"
+document.querySelectorAll(".plan-choose").forEach((btn) =>
+  btn.addEventListener("click", () => subscribe(btn.dataset.plan, btn))
+);
+
+async function subscribe(plan, btn) {
   const err = $("paywallError");
   err.hidden = true;
-
   // Il faut un compte pour s'abonner → on redirige vers l'inscription.
   if (!currentUser) {
     closePaywall();
     openAuth("register");
     return;
   }
-
   const label = btn.textContent;
   btn.disabled = true;
   btn.textContent = "⏳ Redirection…";
   try {
-    const res = await fetch("/api/billing/checkout", { method: "POST" });
+    const res = await fetch("/api/billing/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plan, cycle }),
+    });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.url) throw new Error(data.error || "Paiement indisponible.");
     window.location.href = data.url; // redirection vers Stripe Checkout
@@ -225,7 +262,7 @@ $("subscribeBtn").addEventListener("click", async () => {
     btn.disabled = false;
     btn.textContent = label;
   }
-});
+}
 
 // ---------- Retour depuis Stripe ----------
 (function handleBillingReturn() {
@@ -242,7 +279,8 @@ $("subscribeBtn").addEventListener("click", async () => {
           usage = d.usage;
           renderUsage();
         }
-        showToast("🎉 Bienvenue dans Pro ! Générations illimitées.");
+        const nom = d.usage?.plan === "pro" ? "Pro" : "Starter";
+        showToast(`🎉 Bienvenue dans ${nom} ! Votre abonnement est actif.`);
       })
       .catch(() => showToast("Paiement reçu. Actualisez si besoin."));
   } else if (paiement === "annule") {

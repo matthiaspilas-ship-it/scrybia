@@ -20,7 +20,7 @@ import {
   findByStripeCustomer,
   setSubscription,
 } from "./auth.js";
-import { stripe, PRICE_ID, WEBHOOK_SECRET, stripeReady } from "./billing.js";
+import { stripe, PLANS, PRICE_INDEX, WEBHOOK_SECRET, stripeReady } from "./billing.js";
 import { recentPurchases } from "./socialProof.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -59,13 +59,16 @@ app.post(
     if (event.type === "checkout.session.completed") {
       if (obj.client_reference_id) {
         if (obj.customer) await setStripeCustomer(obj.client_reference_id, obj.customer);
-        await setSubscription(obj.client_reference_id, "active");
+        await setSubscription(obj.client_reference_id, "active", obj.metadata?.tier);
       }
     } else if (event.type.startsWith("customer.subscription.")) {
       const user = await findByStripeCustomer(obj.customer);
       if (user) {
         const status = event.type === "customer.subscription.deleted" ? "canceled" : obj.status;
-        await setSubscription(user.id, status);
+        // On retrouve l'offre via les métadonnées ou le tarif de l'abonnement.
+        const priceId = obj.items?.data?.[0]?.price?.id;
+        const tier = obj.metadata?.tier || PRICE_INDEX[priceId]?.tier;
+        await setSubscription(user.id, status, tier);
       }
     }
     res.json({ received: true });
@@ -131,10 +134,20 @@ app.get("/api/auth/me", async (req, res) => {
 app.post("/api/billing/checkout", requireAuth, async (req, res) => {
   if (!stripeReady()) {
     return res.status(503).json({
-      error:
-        "Paiement non configuré. Ajoutez STRIPE_SECRET_KEY et STRIPE_PRICE_ID dans le fichier .env.",
+      error: "Paiement non configuré. Ajoutez STRIPE_SECRET_KEY dans le fichier .env.",
     });
   }
+  // Offre choisie : { plan: "starter"|"pro", cycle: "monthly"|"annual" }
+  const { plan, cycle } = req.body || {};
+  const priceId = PLANS[plan]?.prices?.[cycle];
+  if (!priceId) return res.status(400).json({ error: "Offre invalide." });
+
+  // Empêche un double abonnement (déjà actif).
+  const usage = await getUsage(req.user.id);
+  if (usage?.subscribed) {
+    return res.status(409).json({ error: "Vous avez déjà un abonnement actif." });
+  }
+
   try {
     const account = await getAccount(req.user.id);
     let customerId = account.stripeCustomerId;
@@ -152,7 +165,9 @@ app.post("/api/billing/checkout", requireAuth, async (req, res) => {
       mode: "subscription",
       customer: customerId,
       client_reference_id: account.id,
-      line_items: [{ price: PRICE_ID, quantity: 1 }],
+      line_items: [{ price: priceId, quantity: 1 }],
+      metadata: { tier: plan, cycle },
+      subscription_data: { metadata: { tier: plan, cycle } },
       success_url: `${base}/?paiement=succes&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${base}/?paiement=annule`,
     });
@@ -175,7 +190,7 @@ app.get("/api/billing/confirm", requireAuth, async (req, res) => {
     }
     if (session.status === "complete" || session.payment_status === "paid") {
       if (session.customer) await setStripeCustomer(req.user.id, session.customer);
-      await setSubscription(req.user.id, "active");
+      await setSubscription(req.user.id, "active", session.metadata?.tier);
     }
     res.json({ usage: await getUsage(req.user.id) });
   } catch (err) {
@@ -209,13 +224,14 @@ app.post("/api/generate", requireAuth, async (req, res) => {
       .json({ error: "Clé API manquante. Ajoutez GROQ_API_KEY dans le fichier .env." });
   }
 
-  // Quota gratuit : au-delà de la limite, il faut un abonnement actif.
+  // Quota : au-delà de la limite (sauf illimité), il faut un abonnement supérieur.
   const usage = await getUsage(req.user.id);
-  if (usage && !usage.subscribed && usage.used >= usage.limit) {
-    return res.status(402).json({
-      error: "quota_atteint",
-      message: `Vous avez utilisé vos ${usage.limit} générations gratuites. Passez à Pro pour continuer.`,
-    });
+  if (usage && !usage.unlimited && usage.remaining <= 0) {
+    const message =
+      usage.plan === "starter"
+        ? `Vous avez atteint vos ${usage.limit} générations ce mois-ci. Passez à Pro pour l'illimité.`
+        : `Vous avez utilisé vos ${usage.limit} générations gratuites. Choisissez une offre pour continuer.`;
+    return res.status(402).json({ error: "quota_atteint", message });
   }
 
   // En-têtes SSE
@@ -260,8 +276,8 @@ app.post("/api/generate", requireAuth, async (req, res) => {
       if (!recu) {
         send("error", { message: "Réponse vide. Réessayez ou reformulez la demande." });
       } else {
-        // Génération réussie → on décompte un crédit gratuit (pas pour les abonnés).
-        if (!usage.subscribed) await incrementUsage(req.user.id);
+        // Génération réussie → on décompte (Pro illimité : incrementUsage l'ignore).
+        await incrementUsage(req.user.id);
         send("done", {});
       }
       res.end();
